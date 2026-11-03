@@ -32,8 +32,7 @@ and every assigned distance agrees with the graph distance.
 The reachability hypotheses are essential because `SimpleGraph.dist` uses `0`
 as its junk value for pairs of vertices that are not reachable.
 -/
-structure BFSInvariant {V : Type*}
-    (G : SimpleGraph V) (root : V) (state : BFSState V) : Prop where
+structure BFSInvariant (root : V) (state : BFSState V) : Prop where
   /-- The vertices seen so far are exactly those within the current depth. -/
   seen_iff : ∀ v, v ∈ state.seen ↔
     G.Reachable root v ∧ G.dist root v ≤ state.depth
@@ -54,16 +53,16 @@ lemma exists_reachable_at_dist (root w : V) (n : Nat)
   have hPrefix : G.dist root u ≤ n := by
     have hWalk := G.dist_le (p.take n)
     rw [p.take_length] at hWalk
-    simp at hWalk
+    simp only [le_inf_iff] at hWalk
     exact hWalk.left
   have hSuffix : G.dist u w ≤ G.dist root w - n := by
     have hWalk := G.dist_le (p.drop n)
     rw [p.drop_length, hp] at hWalk
-    simpa [u] using hWalk
+    simpa only [ge_iff_le] using hWalk
   have hLower : n ≤ G.dist root u := by
     have hTriangle' := (p.drop n).reachable.dist_triangle_right root
     have hTriangle : G.dist root w ≤ G.dist root u + G.dist u w := by
-      simpa [u] using hTriangle'
+      simpa only using hTriangle'
     omega
   exact ⟨u, (p.take n).reachable, le_antisymm hPrefix hLower⟩
 
@@ -110,13 +109,14 @@ theorem initialState_invariant (root : V) :
       · exact (hNotReach hReach).elim
   refine { seen_iff := ?_, frontier_iff := ?_, distance_iff := ?_ }
   · intro v
-    simpa only [nonpos_iff_eq_zero, initialState] using hRoot v
+    simpa only [initialState_seen, Finset.mem_singleton, initialState_depth, nonpos_iff_eq_zero,
+      SimpleGraph.dist_eq_zero_iff_eq_or_not_reachable] using hRoot v
   · intro v
-    simp only [initialState]
+    simp only [initialState_frontier]
     exact hRoot v
   · intro v d
-    simp only [Option.ite_none_right_eq_some, Option.some.injEq, Finset.mem_singleton,
-      and_congr_right_iff, initialState]
+    simp only [initialState_distance, Option.ite_none_right_eq_some, Option.some.injEq,
+      initialState_seen, Finset.mem_singleton, and_congr_right_iff]
     intro hv
     rw [hv, SimpleGraph.dist_self]
 
@@ -145,15 +145,15 @@ lemma nextFrontier_iff (root : V) (state : BFSState V)
       omega
     · obtain ⟨u, huvAdj, huDist⟩ :=
         exists_adj_eq_dist_of_dist_eq_succ G root v state hReach hDist
-      exact ⟨⟨u, (hInv.frontier_iff u).mpr ⟨
-        hReach.trans huvAdj.reachable.symm, huDist⟩, huvAdj⟩, hSeen⟩
+      exact ⟨⟨u, (hInv.frontier_iff u).mpr
+        ⟨hReach.trans huvAdj.reachable.symm, huDist⟩, huvAdj⟩, hSeen⟩
 
 /-- The seen vertices after one step are exactly those within the new depth. -/
 lemma bfsStep_seen_iff (root : V) (state : BFSState V)
     (hInv : BFSInvariant G root state) (v : V) :
     v ∈ (bfsStep G state).seen ↔
       G.Reachable root v ∧ G.dist root v ≤ state.depth + 1 := by
-  simp [bfsStep]
+  simp only [bfsStep_seen, Finset.mem_union]
   constructor
   · rintro (hSeen | hNew)
     · exact (hInv.seen_iff v).mp hSeen |>.imp_right (by omega)
@@ -176,14 +176,14 @@ theorem bfsStep_preserves_invariant (root : V) (state : BFSState V)
   set nf := nextFrontier G state.frontier state.seen with hnf
   have hNew (v : V) :
       v ∈ nf ↔ G.Reachable root v ∧ G.dist root v = state.depth + 1 := by
-    simpa [nf] using nextFrontier_iff G root state hInv v
+    simpa only using nextFrontier_iff G root state hInv v
   refine { seen_iff := ?_, frontier_iff := ?_, distance_iff := ?_ }
   · intro v
     exact bfsStep_seen_iff G root state hInv v
   · intro v
-    simpa [bfsStep] using hNew v
+    simpa only [bfsStep_frontier, bfsStep_depth] using hNew v
   · intro v d
-    simp only [bfsStep, ← hnf]
+    simp only [bfsStep_distance, bfsStep_seen, ← hnf]
     by_cases hNewMem : v ∈ nf
     · rw [ite_eq_left hNewMem]
       constructor
@@ -194,8 +194,7 @@ theorem bfsStep_preserves_invariant (root : V) (state : BFSState V)
       · rintro ⟨_, hd⟩
         have hExact := (hNew v).mp hNewMem |>.right
         exact congrArg some (hExact.symm.trans hd)
-    · rw [ite_eq_right hNewMem, hInv.distance_iff]
-      simp [hNewMem]
+    · simp only [hNewMem, ↓reduceIte, hInv.distance_iff, Finset.mem_union, or_false]
 
 /-- Any bounded number of BFS transitions preserves the invariant. -/
 theorem bfsAux_preserves_invariant (root : V) (fuel : Nat)
@@ -204,17 +203,17 @@ theorem bfsAux_preserves_invariant (root : V) (fuel : Nat)
     BFSInvariant G root (bfsAux G fuel state) := by
   induction fuel generalizing state with
   | zero =>
-      simpa [bfsAux] using hInv
+      simpa only [bfsAux] using hInv
   | succ fuel ih =>
       by_cases hEmpty : state.frontier = ∅
-      · simpa [bfsAux, hEmpty] using hInv
+      · simpa only [bfsAux, hEmpty, ↓reduceIte] using hInv
       · simp only [bfsAux, hEmpty]
         exact ih (bfsStep G state) (bfsStep_preserves_invariant G root state hInv)
 
 /-- The state returned by `bfs` satisfies the invariant. -/
 theorem bfs_invariant (root : V) :
     BFSInvariant G root (bfs G root) := by
-  unfold bfs
+  simp only [bfs]
   exact bfsAux_preserves_invariant G root (Fintype.card V)
     (initialState root) (initialState_invariant G root)
 
@@ -224,32 +223,25 @@ lemma bfsAux_depth_of_frontier_nonempty (fuel : Nat) (state : BFSState V)
     (bfsAux G fuel state).depth = state.depth + fuel := by
   induction fuel generalizing state with
   | zero =>
-      simp [bfsAux]
+      simp only [bfsAux, add_zero]
   | succ fuel ih =>
       by_cases hEmpty : state.frontier = ∅
-      · simp [bfsAux, hEmpty] at hFrontier
+      · simp only [bfsAux, hEmpty, ↓reduceIte, ne_eq, not_true_eq_false] at hFrontier
       · simp only [bfsAux, hEmpty, ↓reduceIte] at hFrontier ⊢
-        have hIH := ih (bfsStep G state) hFrontier
-        calc
-          (bfsAux G fuel (bfsStep G state)).depth =
-              (bfsStep G state).depth + fuel := hIH
-          _ = state.depth + (fuel + 1) := by
-            simp [bfsStep]
-            omega
+        rw [ih (bfsStep G state) hFrontier, bfsStep_depth]
+        omega
 
 /-- The final BFS frontier is empty after processing `Fintype.card V` layers. -/
 lemma bfs_frontier_empty (root : V) :
     (bfs G root).frontier = ∅ := by
   have hInv := bfs_invariant G root
   by_contra hNotEmpty
-  unfold bfs at hNotEmpty
   obtain ⟨w, hw⟩ := Finset.nonempty_iff_ne_empty.mpr hNotEmpty
   have hDepthFinal :
       (bfs G root).depth = Fintype.card V := by
-    unfold bfs
-    simpa [initialState] using
+    simpa only [bfs, initialState, zero_add] using
       bfsAux_depth_of_frontier_nonempty G (Fintype.card V) (initialState root)
-        (by simpa using hNotEmpty)
+        (by simpa only [ne_eq, bfs] using hNotEmpty)
   have hwReachDist := (hInv.frontier_iff w).mp hw
   obtain ⟨p, hp⟩ := hwReachDist.left.exists_walk_length_eq_dist
   have hpPath := p.isPath_of_length_eq_dist hp
@@ -277,7 +269,7 @@ theorem bfs_reachable_mem_seen (root v : V)
     exact hNotSeen' ((hInv.seen_iff v).mpr ⟨hReach, hLe⟩)
   obtain ⟨u, huReach, huDist⟩ :=
     exists_reachable_at_dist G root v (bfs G root).depth hReach (by omega)
-  simpa [hFrontierEmpty] using (hInv.frontier_iff u).mpr ⟨huReach, huDist⟩
+  simpa only [hFrontierEmpty, Finset.notMem_empty] using (hInv.frontier_iff u).mpr ⟨huReach, huDist⟩
 
 /-- The final BFS distance agrees with graph distance for reachable vertices. -/
 theorem bfs_distance_correct (root v : V)

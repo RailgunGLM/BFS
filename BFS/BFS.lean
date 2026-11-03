@@ -31,6 +31,7 @@ structure BFSState (V : Type*) where
   depth : Nat
 
 /-- Construct the initial BFS state, with `root` as the sole vertex in layer 0. -/
+@[simps]
 def initialState {V : Type*} [DecidableEq V] (root : V) : BFSState V where
   frontier := {root}
   seen := {root}
@@ -50,10 +51,11 @@ def nextFrontier {V : Type*} [Fintype V] [DecidableEq V]
 Process one BFS layer, assigning the next distance to newly discovered
 vertices.
 -/
+@[simps]
 def bfsStep {V : Type*} [Fintype V] [DecidableEq V]
     (G : SimpleGraph V) [DecidableRel G.Adj]
     (state : BFSState V) : BFSState V :=
-  let newFrontier := nextFrontier G state.frontier state.seen
+  letI newFrontier := nextFrontier G state.frontier state.seen
   {
     frontier := newFrontier
     seen := state.seen ∪ newFrontier
@@ -67,6 +69,7 @@ Run at most `fuel` BFS transitions, stopping early if the frontier is empty.
 This bounded recursion makes termination evident to Lean. The choice of fuel
 used by `bfs` below should be justified alongside the BFS invariants.
 -/
+@[simp]
 def bfsAux {V : Type*} [Fintype V] [DecidableEq V]
     (G : SimpleGraph V) [DecidableRel G.Adj] :
     Nat → BFSState V → BFSState V
@@ -80,6 +83,7 @@ def bfsAux {V : Type*} [Fintype V] [DecidableEq V]
 /--
 Run the layer-based BFS from `root`.
 -/
+@[simp]
 def bfs {V : Type*} [Fintype V] [DecidableEq V]
     (G : SimpleGraph V) [DecidableRel G.Adj]
     (root : V) : BFSState V :=
