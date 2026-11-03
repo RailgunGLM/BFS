@@ -110,22 +110,15 @@ theorem initialState_invariant (root : V) :
       · exact (hNotReach hReach).elim
   refine { seen_iff := ?_, frontier_iff := ?_, distance_iff := ?_ }
   · intro v
-    unfold initialState
-    dsimp only
-    simpa only [nonpos_iff_eq_zero] using hRoot v
+    simpa only [nonpos_iff_eq_zero, initialState] using hRoot v
   · intro v
-    unfold initialState
-    dsimp only
+    simp only [initialState]
     exact hRoot v
-  · unfold initialState
-    intro v d
+  · intro v d
     simp only [Option.ite_none_right_eq_some, Option.some.injEq, Finset.mem_singleton,
-      and_congr_right_iff]
+      and_congr_right_iff, initialState]
     intro hv
-    apply Eq.congr
-    rw [hv]
-    exact Eq.symm SimpleGraph.dist_self
-    rfl
+    rw [hv, SimpleGraph.dist_self]
 
 variable [Fintype V] [DecidableRel G.Adj]
 
@@ -160,9 +153,7 @@ lemma bfsStep_seen_iff (root : V) (state : BFSState V)
     (hInv : BFSInvariant G root state) (v : V) :
     v ∈ (bfsStep G state).seen ↔
       G.Reachable root v ∧ G.dist root v ≤ state.depth + 1 := by
-  unfold bfsStep
-  dsimp only
-  rw [Finset.mem_union]
+  simp [bfsStep]
   constructor
   · rintro (hSeen | hNew)
     · exact (hInv.seen_iff v).mp hSeen |>.imp_right (by omega)
@@ -190,8 +181,7 @@ theorem bfsStep_preserves_invariant (root : V) (state : BFSState V)
   · intro v
     exact bfsStep_seen_iff G root state hInv v
   · intro v
-    simp [bfsStep]
-    exact hNew v
+    simpa [bfsStep] using hNew v
   · intro v d
     simp only [bfsStep, ← hnf]
     by_cases hNewMem : v ∈ nf
