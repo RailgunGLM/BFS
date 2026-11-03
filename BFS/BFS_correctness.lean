@@ -110,12 +110,12 @@ theorem initialState_invariant (root : V) :
       · exact (hNotReach hReach).elim
   refine { seen_iff := ?_, frontier_iff := ?_, distance_iff := ?_ }
   · intro v
-    change v ∈ ({root} : Finset V) ↔
-      G.Reachable root v ∧ G.dist root v ≤ 0
+    unfold initialState
+    dsimp only
     simpa only [nonpos_iff_eq_zero] using hRoot v
   · intro v
-    change v ∈ ({root} : Finset V) ↔
-      G.Reachable root v ∧ G.dist root v = 0
+    unfold initialState
+    dsimp only
     exact hRoot v
   · unfold initialState
     intro v d
@@ -160,7 +160,8 @@ lemma bfsStep_seen_iff (root : V) (state : BFSState V)
     (hInv : BFSInvariant G root state) (v : V) :
     v ∈ (bfsStep G state).seen ↔
       G.Reachable root v ∧ G.dist root v ≤ state.depth + 1 := by
-  change v ∈ state.seen ∪ nextFrontier G state.frontier state.seen ↔ _
+  unfold bfsStep
+  dsimp only
   rw [Finset.mem_union]
   constructor
   · rintro (hSeen | hNew)
@@ -181,7 +182,7 @@ lemma bfsStep_seen_iff (root : V) (state : BFSState V)
 theorem bfsStep_preserves_invariant (root : V) (state : BFSState V)
     (hInv : BFSInvariant G root state) :
     BFSInvariant G root (bfsStep G state) := by
-  let nf := nextFrontier G state.frontier state.seen
+  set nf := nextFrontier G state.frontier state.seen with hnf
   have hNew (v : V) :
       v ∈ nf ↔ G.Reachable root v ∧ G.dist root v = state.depth + 1 := by
     simpa [nf] using nextFrontier_iff G root state hInv v
@@ -189,11 +190,10 @@ theorem bfsStep_preserves_invariant (root : V) (state : BFSState V)
   · intro v
     exact bfsStep_seen_iff G root state hInv v
   · intro v
-    change v ∈ nf ↔ G.Reachable root v ∧ G.dist root v = state.depth + 1
+    simp [bfsStep]
     exact hNew v
   · intro v d
-    change (if v ∈ nf then some (state.depth + 1) else state.distance v) = some d ↔
-      v ∈ state.seen ∪ nf ∧ G.dist root v = d
+    simp only [bfsStep, ← hnf]
     by_cases hNewMem : v ∈ nf
     · rw [ite_eq_left hNewMem]
       constructor
